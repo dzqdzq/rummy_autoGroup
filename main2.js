@@ -1,5 +1,4 @@
-let cardScore = [0, 10, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10];
-let ghost;
+let cardScore = [0, 10, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 0, 0];
 
 const Poker = [
   0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, // 方块 1 - k
@@ -24,29 +23,6 @@ function make2Array(m, n) {
   return r;
 }
 
-function calS(x, l, r, rg, u) {
-  if (r > 14) {
-    return -1;
-  }
-
-  let ret = 0, num = 0;
-  for (let i = l; i <= r; i++) {
-    let j = i == 14 ? 1 : i;
-    if (u[x][j]) {
-      if (j === ghost) {
-        rg--;
-      }
-      ret += cardScore[j];
-      num++;
-    }
-  }
-
-  if (num + rg == r - l + 1) {
-    return ret;
-  }
-  return -1;
-}
-
 function memset(d, v) {
   for (let i = 0, j = d.length;i < j;i++) {
     if (Array.isArray(d[0])) {
@@ -67,21 +43,56 @@ function count1(x) {
   return ret;
 }
 
-function isHun(x) {
-  x &= 0xf;
-  return x === 0xf || x === ghost;
-}
-
 //
-function group(handCards) {
+function group({handCards, ghost}) {
+  ghost &= 0xf;
   let score = {}, f = {0: 0}, g = {};
   let nowCard = [];
   let out = [];
   let n = handCards.length;
   const SIZE = 1 << n;
 
+
   let u = make2Array(4, 13);
   let used = [0, 0, 0, 0];
+  let cardScoreTpl = cardScore.slice(0);
+  cardScoreTpl[ghost] = 0;// 王与joker为0分
+
+  function isHun(x) {
+    return cardScoreTpl[x & 0xf] === 0;
+  }
+
+  function getScore(cards) {
+    let sum = 0;
+    for (let i = 0, j = cards.length;i < j;i++) {
+      sum += cardScoreTpl[cards[i] & 0xf];
+    }
+    return sum;
+  }
+
+  function calS(x, l, r, rg) {
+    if (r > 14) {
+      return -1;
+    }
+
+    let num = 0, ret = 0;
+    for (let i = l; i <= r; i++) {
+      let j = i == 14 ? 1 : i;
+      if (u[x][j]) {
+        if (j === ghost) {
+          rg--;
+        }
+        num++;
+        ret += cardScore[j];//
+      }
+    }
+
+    if (num + rg == r - l + 1) {
+      return rg === 0 ? (0x100 | ret) : ret;
+      // return ret;
+    }
+    return -1;
+  }
 
   let cal = ()=>{
     let num = nowCard.length, ret = -1;
@@ -104,7 +115,8 @@ function group(handCards) {
           }
         }
         if (nowNum + ghostNum == num) {
-          ret = Math.max(ret, nowNum * cardScore[j]);
+          ret = Math.max(ret, nowNum * cardScore[j]);//
+          // ret = 10;
         }
       }
     }
@@ -136,7 +148,7 @@ function group(handCards) {
 
     for (let i = 0; i < 4; i++) {
       for (let l = used[i]; l <= 13; l++) {
-        ret = Math.max(ret, calS(i, l, l + num - 1, realGhost, u));
+        ret = Math.max(ret, calS(i, l, l + num - 1, realGhost));
       }
     }
     return ret;
@@ -144,6 +156,9 @@ function group(handCards) {
 
   // init
   for (let i = 0; i < SIZE; i++) {
+    if (count1(i) < 3) {
+      continue;
+    }
     nowCard.splice(0);
     for (let j = 0; j < n; j++) {
       if (i & (1 << j)) {
@@ -151,16 +166,13 @@ function group(handCards) {
       }
     }
 
-    let thisScore = cal();
-    if (thisScore > 0) {
-      score[i] = thisScore;
+    let s = cal();
+    if (s > 0) {
+      score[i] = s;
     }
   }
 
   for (let i = 7; i < SIZE; i++) {
-    if (count1(i) < 3) {
-      continue;
-    }
     for (let j = i; j != 0; j = ((j - 1) & i)) {
       if (count1(j) < 3 || score[j] === undefined) {
         continue;
@@ -171,12 +183,16 @@ function group(handCards) {
       }
       if ( f[k] + score[j] > (f[i] || 0) ) {
         f[i] = f[k] + score[j];
+        if (f[i] & 0xf00) { // true 表示包含纯顺子
+          f[i] = 0x100 | (f[i] & 0xff);
+        }
         g[i] = j;
       }
     }
   }
 
-  let maxScore = 0, endState = 0;
+  let maxScore = 0, endState = 0, isChun = false;
+
   for (let i = 0; i < SIZE; i++) {
     if (!f[i]) {
       continue;
@@ -188,10 +204,14 @@ function group(handCards) {
       maxScore = f[i];
       endState = i;
     }
+    if (maxScore > 0xff) {
+      isChun = true;
+    }
   }
 
   let u2 = u[0];
 
+  let minScore = 0;
   // 取结果
   while (endState) {
     let x = g[endState];
@@ -207,22 +227,31 @@ function group(handCards) {
     endState ^= g[endState];
   }
 
+  // 没有纯顺子的情况下，任何组合都无效
+  if (!isChun) {
+    out.forEach(g=>{
+      minScore += getScore(g);
+    });
+  }
+
   // push 杂牌
   if (f[0] !== n ) {
     let o = [];
     for (let i = 0; i < n; i++) {
       if ( u2[i] !== -1 ) {
+        minScore += cardScoreTpl[handCards[i] & 0xf];
         o.push(handCards[i]);
       }
     }
+    minScore = Math.min(80, minScore);
     out.push(o.splice(0, 4));
     for (let i = 1;o.length; i++) {
       out.push(o.splice(0, 3));
     }
   }
   display(out);
-  console.log(maxScore);
-  return maxScore;
+  console.log(minScore);
+  return {out, minScore};
 }
 
 function display(group) {
@@ -239,14 +268,32 @@ function display(group) {
 }
 
 function main() {
-  let handCards = [
-    [0x1, 0x1, 0x4f, 0x2, 0x2, 0x4f, 0x3, 0x4, 0xb, 0xc, 0xd, 0x14, 0x24],
+
+  let data = [
+    {
+      handCards: [0x02, 0x12, 0x22, 0x03, 0x13, 0x23, 0x04, 0x14, 0x24, 0x01, 0x0c, 0x0d],
+      ghost: 0x5
+    },
+    {
+      handCards: [0x1, 0x2, 0xf, 0x5],
+      ghost: 0x2
+    },
+    {
+      handCards: [0x01, 0x02, 0x03, 0x06, 0x14, 0x34, 0x11, 0x12, 0x13, 0x21, 0x22, 0x23],
+      ghost: 0x6
+    },
+    {
+      handCards: [0x19, 0x1a, 0x1b, 0x4f, 0x16, 0x1b, 0x14, 0x17, 0x34, 0x32, 0x33, 0x15, 0x18],
+      ghost: 0xb
+    },
+    {
+      handCards: [0x32, 0x34, 0x3B, 0x3C, 0x22, 0x23, 0x24, 0x17, 0x18, 0x0D, 0x07, 0x08, 0x09],
+      ghost: 0x3C
+    }
   ];
+
   console.time();
-  for (let i = 0;i < handCards.length;i++) {
-    ghost = 0xf;
-    group(handCards[i]);
-  }
+  group(data[0]);
   console.timeEnd();
   return 0;
 }
