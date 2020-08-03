@@ -50,7 +50,6 @@ function memset(d, v) {
   }
 }
 
-
 // 计算1的个数
 function count1(x) {
   let ret = 0;
@@ -61,8 +60,6 @@ function count1(x) {
   return ret;
 }
 
-
-//
 function group({handCards, ghost}) {
   ghost &= 0xf;
   let score = {}, f = {0: 0}, g = {};
@@ -175,9 +172,9 @@ function group({handCards, ghost}) {
     if (isCanRun) {
       ret = calS(beginColor, beginValue, beginValue + num - 1, realGhost);
 
-      if (beginValue === 1) { // 2
+      if (beginValue === 1) {
         let secondValue = -1;
-        for (let i = 2;i <= 13;i++) {
+        for (let i = 2;i < 13;i++) {
           if (u[beginColor][i]) {
             secondValue = i;
             break;
@@ -211,6 +208,7 @@ function group({handCards, ghost}) {
     }
   }
 
+  // 查找最好的结果
   for (let i = 7; i < SIZE; i++) {
     for (let j = i; j != 0; j = ((j - 1) & i)) {
       if (score[j] === undefined) {
