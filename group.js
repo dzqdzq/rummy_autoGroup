@@ -13,6 +13,23 @@ const Poker = [
   // 79 79 大小王一致
 ];
 
+const best = {
+  0x010000: 0x000100,
+  0x020000: 0x000200,
+  0x030000: 0x000200,
+  0x040000: 0x000200,
+  0x100000: 0x001000,
+  0x200000: 0x002000,
+  0x300000: 0x002000,
+  0x400000: 0x002000,
+  0x110000: 0x002000,
+  0x120000: 0x002000,
+  0x130000: 0x002000,
+  0x210000: 0x002000,
+  0x220000: 0x002000,
+  0x310000: 0x002000,
+};
+
 // 生成二维数组
 function make2Array(m, n) {
   let r = new Array(m);
@@ -33,6 +50,7 @@ function memset(d, v) {
   }
 }
 
+
 // 计算1的个数
 function count1(x) {
   let ret = 0;
@@ -43,24 +61,23 @@ function count1(x) {
   return ret;
 }
 
+
 //
 function group({handCards, ghost}) {
   ghost &= 0xf;
   let score = {}, f = {0: 0}, g = {};
-  let nowCard = [];
+  let nowCard = new Array(13);
   let out = [];
   let n = handCards.length;
   const SIZE = 1 << n;
 
+  let maxScore = 0, minScore = 0, endState = 0, isChun = false;
 
-  let u = make2Array(4, 13);
+  handCards.sort((a, b)=>a - b);
+  let u = make2Array(4, 14);
   let used = [0, 0, 0, 0];
   let cardScoreTpl = cardScore.slice(0);
   cardScoreTpl[ghost] = 0;// 王与joker为0分
-
-  function isHun(x) {
-    return cardScoreTpl[x & 0xf] === 0;
-  }
 
   function getScore(cards) {
     let sum = 0;
@@ -83,90 +100,112 @@ function group({handCards, ghost}) {
           rg--;
         }
         num++;
-        ret += cardScore[j];//
+        ret += cardScore[j];
       }
     }
 
     if (num + rg == r - l + 1) {
-      return rg === 0 ? (0x100 | ret) : ret;
+      let type = rg === 0 ? 0x100000 : 0x010000;
+      return type | ret;
       // return ret;
     }
     return -1;
   }
 
-  let cal = ()=>{
-    let num = nowCard.length, ret = -1;
-    if (num <= 2) {
+  // 对一小撮牌初步分析，看是Set还是顺子
+  let cal = (num)=>{
+    let ret = -1;
+
+    memset(u, 0);
+    memset(used, 0);
+
+    let king = 0;
+    let rg = 0;
+    let isCanSet = true, isCanRun = true;
+    let beginColor = -1, beginValue = -1;
+    for (let i = 0; i < num; i++) {
+      let v = nowCard[i] & 0xf;// 牌值
+      if (v !== 0xf) { // 非王
+        let c = nowCard[i] >> 4;// 花色
+        if (used[c]) { // 这个颜色已经使用
+          isCanSet = false;
+        }
+        if (beginColor === -1) {
+          beginColor = c;
+          beginValue = v;
+        }
+        if (v !== ghost) {
+          // 有重复的牌
+          if (u[c][v] === 1) {
+            return ret;
+          }
+
+          // 颜色不同说明不是顺子
+          if (beginColor != c) {
+            isCanRun = false;
+          }
+
+          // 牌值不一样，一定不是Set
+          if (beginValue != v) {
+            isCanSet = false;
+          }
+        } else {
+          rg++;
+        }
+        u[c][v]++;
+        used[c]++;
+      } else {
+        king++;
+      }
+    }// end for
+
+    // 全部是王，是无效组合
+    if (num === king) {
       return ret;
     }
 
-    if (num <= 4) {
-      let nowNum = 0, ghostNum = 0;
-      for (let j = 1; j <= 13; j++) {
-        memset(used, 0);
-        nowNum = 0, ghostNum = 0;
-        for (let i = 0; i < num; i++) {
-          let c = nowCard[i] >> 4;
-          if ((nowCard[i] & 0xf) == j && used[c] == 0) {
-            used[c] = 1;
-            nowNum++;
-          } else if (isHun(nowCard[i]) ) {
-            ghostNum++;
-          }
-        }
-        if (nowNum + ghostNum == num) {
-          ret = Math.max(ret, nowNum * cardScore[j]);//
-          // ret = 10;
-        }
-      }
-    }
-    memset(u, 0);
-    memset(used, 0xf);
-    let realGhost = 0;// 实际的百搭牌
-    for (let i = 0; i < num; i++) {
-      let v = nowCard[i] & 0xf;
-      if (v !== 0xf) {
-        let c = nowCard[i] >> 4;
-        if (used[c] > v) {
-          used[c] = v;
-        }
-        u[c][v]++;
-      } else {
-        realGhost++;
-      }
+    let realGhost = king + rg;
+    // Set
+    if (num <= 4 && isCanSet) {
+      let real = num - realGhost;// 真实的牌
+      return real * cardScore[beginValue];
     }
 
-    if (ghost !== 0xf) {
-      for (let i = 0; i < 4; i++) {
-        for (let j = 1; j <= 13; j++) {
-          if (u[i][j] && j === ghost) {
-            realGhost += u[i][j];
+    // Run
+    if (isCanRun) {
+      ret = calS(beginColor, beginValue, beginValue + num - 1, realGhost);
+
+      if (beginValue === 1) { // 2
+        let secondValue = -1;
+        for (let i = 2;i <= 13;i++) {
+          if (u[beginColor][i]) {
+            secondValue = i;
+            break;
           }
         }
+        if (secondValue > 0) {
+          ret = Math.max(ret, calS(beginColor, secondValue, secondValue + num - 1, realGhost));
+        }
       }
-    }
+      return ret;
+    }// end if Run
 
-    for (let i = 0; i < 4; i++) {
-      for (let l = used[i]; l <= 13; l++) {
-        ret = Math.max(ret, calS(i, l, l + num - 1, realGhost));
-      }
-    }
     return ret;
   };// end cal
 
   // init
-  for (let i = 0; i < SIZE; i++) {
+  for (let i = 7, k = 0; i < SIZE; i++) {
     if (count1(i) < 3) {
       continue;
     }
-    nowCard.splice(0);
-    for (let j = 0; j < n; j++) {
-      if (i & (1 << j)) {
-        nowCard.push(handCards[j]);
+    k = 0;
+    for (let j = 0, l = i; j < n && l; j++, l >>= 1) {
+      if (l & 1) {
+        nowCard[k++] = handCards[j];
       }
     }
 
-    let s = cal();
+    let s = cal(k);
     if (s > 0) {
       score[i] = s;
     }
@@ -174,44 +213,36 @@ function group({handCards, ghost}) {
 
   for (let i = 7; i < SIZE; i++) {
     for (let j = i; j != 0; j = ((j - 1) & i)) {
-      if (count1(j) < 3 || score[j] === undefined) {
+      if (score[j] === undefined) {
         continue;
       }
       let k = i ^ j;
       if (f[k] === undefined) {
         continue;
       }
-      if ( f[k] + score[j] > (f[i] || 0) ) {
-        f[i] = f[k] + score[j];
-        if (f[i] & 0xf00) { // true 表示包含纯顺子
-          f[i] = 0x100 | (f[i] & 0xff);
-        }
+
+      let sum = f[k] + score[j];
+      let sumType = sum & 0xff0000;
+      let tmpScore = best[sumType] | (sum & 0xff);
+      if ( tmpScore > (f[i] & 0x00ffff) ) {
+        f[i] = sumType | tmpScore;
         g[i] = j;
+
+        if (tmpScore > maxScore) {
+          maxScore = tmpScore;
+          endState = i;
+        } else if (tmpScore == maxScore && count1(i) > count1(endState) ) {
+          maxScore = tmpScore;
+          endState = i;
+        }
+        if (maxScore > 0x2000) {
+          isChun = true;
+        }
       }
     }
   }
 
-  let maxScore = 0, endState = 0, isChun = false;
-
-  for (let i = 0; i < SIZE; i++) {
-    if (!f[i]) {
-      continue;
-    }
-    if (f[i] > maxScore) {
-      maxScore = f[i];
-      endState = i;
-    } else if (f[i] == maxScore && count1(i) > count1(endState) ) {
-      maxScore = f[i];
-      endState = i;
-    }
-    if (maxScore > 0xff) {
-      isChun = true;
-    }
-  }
-
   let u2 = u[0];
-
-  let minScore = 0;
   // 取结果
   while (endState) {
     let x = g[endState];
@@ -249,34 +280,44 @@ function group({handCards, ghost}) {
       out.push(o.splice(0, 3));
     }
   }
+
+  // console.log('raw handCards:', displayHand(handCards).join(', '));
   display(out);
-  console.log(minScore);
+  console.log('minScore: ', minScore);
+  // console.log('maxScore: 0x0', maxScore.toString(16));
   return {out, minScore};
+}
+
+function displayHand(g) {
+  return g.map(c=>{
+    let x = c.toString(16);
+    if (x.length == 1) {
+      x = '0' + x;
+    }
+    return `0x${x}`;
+  });
 }
 
 function display(group) {
   let s = group.map(g => {
-    return g.map(c=>{
-      let x = c.toString(16);
-      if (x.length == 1) {
-        x = '0' + x;
-      }
-      return `0x${x}`;
-    });
+    return displayHand(g);
   }).join(' | ');
   console.log(s);
 }
 
 function main() {
-
   let data = [
     {
       handCards: [0x02, 0x12, 0x22, 0x03, 0x13, 0x23, 0x04, 0x14, 0x24, 0x01, 0x0c, 0x0d],
       ghost: 0x5
     },
     {
-      handCards: [0x1, 0x2, 0xf, 0x5],
-      ghost: 0x2
+      handCards: [0x02, 0x28, 0x17, 0x27, 0x1a, 0x07, 0x3d, 0x3c, 0x35, 0x25, 0x29, 0x4f, 0x31],
+      ghost: 0x1A
+    },
+    {
+      handCards: [0x2, 0x3, 0x4, 0x3, 0x4, 0x4f, 0x6, 0x14, 0x24, 0x32, 0x12, 0x13, 0x14],
+      ghost: 0xf
     },
     {
       handCards: [0x01, 0x02, 0x03, 0x06, 0x14, 0x34, 0x11, 0x12, 0x13, 0x21, 0x22, 0x23],
@@ -287,13 +328,17 @@ function main() {
       ghost: 0xb
     },
     {
-      handCards: [0x32, 0x34, 0x3B, 0x3C, 0x22, 0x23, 0x24, 0x17, 0x18, 0x0D, 0x07, 0x08, 0x09],
-      ghost: 0x3C
+      handCards: [0x28, 0x26, 0x27, 0x18, 0x2B, 0x2C, 0x2D, 0x08, 0x0d, 0x37, 0x39, 0x09, 0x13],
+      ghost: 0x0d
+    },
+    {
+      handCards: [0x1a, 0x1b, 0x1a],
+      ghost: 0x0a
     }
   ];
 
   console.time();
-  group(data[0]);
+  group(data[6]);
   console.timeEnd();
   return 0;
 }
