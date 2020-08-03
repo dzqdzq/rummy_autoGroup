@@ -231,12 +231,11 @@ function group({handCards, ghost}) {
         if (tmpScore > maxScore) {
           maxScore = tmpScore;
           endState = i;
+          isChun =  maxScore > 0x2000;
         } else if (tmpScore == maxScore && count1(i) > count1(endState) ) {
           maxScore = tmpScore;
           endState = i;
-        }
-        if (maxScore > 0x2000) {
-          isChun = true;
+          isChun =  maxScore > 0x2000;
         }
       }
     }
