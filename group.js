@@ -281,7 +281,7 @@ function group({handCards, ghost}) {
     }
   }
 
-  // console.log('raw handCards:', displayHand(handCards).join(', '));
+  console.log('raw handCards:', displayHand(handCards).join(', '));
   display(out);
   console.log('minScore: ', minScore);
   // console.log('maxScore: 0x0', maxScore.toString(16));
@@ -338,7 +338,7 @@ function main() {
   ];
 
   console.time();
-  group(data[6]);
+  group(data[5]);
   console.timeEnd();
   return 0;
 }
