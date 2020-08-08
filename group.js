@@ -127,11 +127,13 @@ function group({handCards, ghost}) {
         if (used[c]) { // 这个颜色已经使用
           isCanSet = false;
         }
-        if (beginColor === -1) {
-          beginColor = c;
-          beginValue = v;
-        }
+
         if (v !== ghost) {
+          if (beginColor === -1) {
+            beginColor = c;
+            beginValue = v;
+          }
+
           // 有重复的牌
           if (u[c][v] === 1) {
             return ret;
@@ -329,13 +331,13 @@ function main() {
       ghost: 0x0d
     },
     {
-      handCards: [0x1a, 0x1b, 0x1a],
+      handCards: [0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x0c,0x1c,0x2c],
       ghost: 0x0a
     }
   ];
 
   console.time();
-  group(data[5]);
+  group(data[6]);
   console.timeEnd();
   return 0;
 }
